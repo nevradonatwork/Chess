@@ -2,9 +2,7 @@ const BASE = 'https://api.chess.com/pub/player';
 
 export async function fetchOngoingGames(username) {
   const clean = username.trim().replace(/^https?:\/\/www\.chess\.com\/member\//i, '').replace(/\/$/, '');
-  const res = await fetch(`${BASE}/${clean}/games`, {
-    headers: { 'User-Agent': 'ChessAnalyzerApp/1.0' }
-  });
+  const res = await fetch(`${BASE}/${clean}/games`);
   if (!res.ok) throw new Error(`chess.com API error (${res.status}) – check username`);
   const data = await res.json();
   return { games: data.games || [], username: clean };
