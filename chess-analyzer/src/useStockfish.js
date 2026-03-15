@@ -8,10 +8,19 @@ export function useStockfish() {
 
   useEffect(() => {
     let sf;
+    let timeout;
     try {
       sf = new Worker(`${process.env.PUBLIC_URL}/stockfish.js`);
 
       let initDone = false;
+
+      timeout = setTimeout(() => {
+        if (!initDone) {
+          setError('Engine timed out – try refreshing or use a desktop browser');
+          if (sf) sf.terminate();
+        }
+      }, 20000);
+
       const initHandler = (e) => {
         const msg = typeof e === 'string' ? e : e.data;
         if (msg === 'uciok') {
@@ -20,6 +29,7 @@ export function useStockfish() {
         if (msg === 'readyok') {
           if (!initDone) {
             initDone = true;
+            clearTimeout(timeout);
             sfRef.current = sf;
             setReady(true);
           }
@@ -27,16 +37,23 @@ export function useStockfish() {
       };
 
       sf.onmessage = initHandler;
-      sf.onerror = () => setError('Stockfish failed to load');
+      sf.onerror = (e) => {
+        clearTimeout(timeout);
+        setError('Engine failed to load – try refreshing');
+      };
       sf.postMessage('uci');
     } catch (e) {
-      setError('Stockfish not available');
+      clearTimeout(timeout);
+      setError('Engine not supported on this browser');
     }
 
-    return () => { if (sf) sf.terminate(); };
+    return () => {
+      clearTimeout(timeout);
+      if (sf) sf.terminate();
+    };
   }, []);
 
-  const analyze = useCallback((fen, depth = 18) => {
+  const analyze = useCallback((fen, depth = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? 12 : 18) => {
     return new Promise((resolve) => {
       const sf = sfRef.current;
       if (!sf) { resolve({ bestMove: null, pvMoves: [], score: null }); return; }
