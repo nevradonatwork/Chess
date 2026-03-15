@@ -25,6 +25,9 @@
       "react-app/jest"
     ]
   },
+  "overrides": {
+    "@types/node": "20.14.0"
+  },
   "browserslist": {
     "production": [
       ">0.2%",
