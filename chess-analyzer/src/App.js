@@ -205,12 +205,12 @@ export default function App() {
 
       <main className="app-main">
         <div className="search-section">
-          <label className="search-label">Enter your chess.com profile</label>
+          <label className="search-label">Enter your chess.com username</label>
           <div className="search-row">
             <input
               className="search-input"
               type="text"
-              placeholder="chess.com/member/YourName  or  YourName"
+              placeholder="e.g. nevradonat"
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleFetch()}
