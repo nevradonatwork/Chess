@@ -24,7 +24,12 @@ export function parsePgn(pgn) {
 
   // Extract move text after headers
   const moveText = pgn.replace(/\[[^\]]*\]/g, '').trim();
-  const moves = moveText.replace(/\s*(1-0|0-1|1\/2-1\/2|\*)\s*$/, '').trim();
+  const moves = moveText
+    .replace(/\{[^}]*\}/g, '')        // remove { comments }
+    .replace(/\d+\.\.\.\s*/g, '')     // remove black move numbers like "1... "
+    .replace(/\s*(1-0|0-1|1\/2-1\/2|\*)\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
   return { white, black, moves, fen };
 }
