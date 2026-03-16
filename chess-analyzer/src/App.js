@@ -25,7 +25,13 @@ function MoveList({ moves }) {
 }
 
 function GameCard({ result }) {
-  const { white, black, moves, isMyTurn, myColor, analysis } = result;
+  const { white, black, moves, isMyTurn, myColor, analysis, game } = result;
+  const timeClass = game.time_class;
+  const timeLabel = timeClass === 'daily' ? '📅 Daily'
+    : timeClass === 'rapid'  ? '⏱ Rapid'
+    : timeClass === 'blitz'  ? '⚡ Blitz'
+    : timeClass === 'bullet' ? '🔫 Bullet'
+    : timeClass ? timeClass.charAt(0).toUpperCase() + timeClass.slice(1) : '';
 
   return (
     <div className={`game-card ${isMyTurn ? 'my-turn' : ''}`}>
@@ -36,6 +42,7 @@ function GameCard({ result }) {
           <span className="player-name">{black}</span>
         </div>
         <div className="game-meta">
+          {timeLabel && <span className="time-class-badge">{timeLabel}</span>}
           <span className="my-color">{myColor === 'white' ? '♙ White' : '♟ Black'}</span>
           <span className={`turn-badge ${isMyTurn ? 'your-turn' : 'waiting'}`}>
             {isMyTurn ? '🎯 Your turn!' : `⏳ ${myColor === 'white' ? black : white}'s turn`}
