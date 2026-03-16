@@ -46,22 +46,17 @@ export async function fetchOngoingGames(username) {
   }));
 
   const dailyUrls = new Set(dailyGames.map(g => g.url));
-  const nowSec = Date.now() / 1000;
 
-  // Live games from this month's archive
-  // Include: in-progress (result '*') OR finished within last 3 hours
+  // Live games from this month's archive — only include games still in progress (no result yet)
   const liveGames = (archiveData.games || [])
     .filter(g => g.time_class && g.time_class !== 'daily')
     .filter(g => {
       const whiteResult = typeof g.white === 'object' ? g.white.result : null;
       const blackResult = typeof g.black === 'object' ? g.black.result : null;
-      const inProgress = whiteResult === null || whiteResult === undefined ||
-                         whiteResult === '*' || blackResult === '*';
-      const recentlyFinished = g.end_time && (nowSec - g.end_time) < 3 * 3600;
-      return inProgress || recentlyFinished;
+      return !whiteResult || whiteResult === '*' || !blackResult || blackResult === '*';
     })
     .filter(g => !dailyUrls.has(g.url))
-    .sort((a, b) => (b.end_time || nowSec) - (a.end_time || nowSec))
+    .sort((a, b) => (b.end_time || 0) - (a.end_time || 0))
     .slice(0, 10)
     .map(g => ({
       ...g,
