@@ -1,7 +1,9 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import './App.css';
 import { fetchOngoingGames, parsePgn } from './chesscomApi';
 import { useStockfish, uciMovesToSan, fenFromMoves } from './useStockfish';
+
+const DEFAULT_USERNAME = 'nevradonat';
 
 function MoveList({ moves }) {
   if (!moves || moves.length === 0) return null;
@@ -84,7 +86,7 @@ function GameCard({ result }) {
 }
 
 export default function App() {
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(DEFAULT_USERNAME);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState('');
   const [gameResults, setGameResults] = useState([]);
@@ -93,6 +95,7 @@ export default function App() {
   const { ready: sfReady, error: sfError, analyze } = useStockfish();
   const sfReadyRef = useRef(sfReady);
   sfReadyRef.current = sfReady;
+  const autoLoaded = useRef(false);
 
   const runAnalysis = useCallback(async (entries, analyze) => {
     for (let i = 0; i < entries.length; i++) {
@@ -164,6 +167,14 @@ export default function App() {
       setLoading(false);
     }
   }, [input, analyze, runAnalysis]);
+
+  useEffect(() => {
+    if (sfReady && !autoLoaded.current) {
+      autoLoaded.current = true;
+      handleFetch();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sfReady]);
 
   return (
     <div className="app">
