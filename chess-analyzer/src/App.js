@@ -164,7 +164,7 @@ export default function App() {
         const myColor = isWhite ? 'white' : 'black';
         const isMyTurn = game.turn === myColor;
         return { game, white, black, moves: parsePgn(game.pgn).moves, isWhite, myColor, isMyTurn, analysis: null };
-      });
+      }).sort((a, b) => (b.isMyTurn ? 1 : 0) - (a.isMyTurn ? 1 : 0));
 
       setGameResults(entries);
       runAnalysis(entries, analyze);
