@@ -26,6 +26,7 @@ function MoveList({ moves }) {
 
 function GameCard({ result }) {
   const { white, black, moves, isMyTurn, myColor, analysis, game } = result;
+  const [copied, setCopied] = useState(false);
   const timeClass = game.time_class;
   const timeLabel = timeClass === 'daily' ? '📅 Daily'
     : timeClass === 'rapid'  ? '⏱ Rapid'
@@ -33,13 +34,25 @@ function GameCard({ result }) {
     : timeClass === 'bullet' ? '🔫 Bullet'
     : timeClass ? timeClass.charAt(0).toUpperCase() + timeClass.slice(1) : '';
 
+  const handleCopy = () => {
+    navigator.clipboard.writeText(moves || '').then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   return (
     <div className={`game-card ${isMyTurn ? 'my-turn' : ''}`}>
       <div className="game-header">
-        <div className="game-title">
-          <span className="player-name">{white}</span>
-          <span className="vs">vs</span>
-          <span className="player-name">{black}</span>
+        <div className="game-header-top">
+          <div className="game-title">
+            <span className="player-name">{white}</span>
+            <span className="vs">vs</span>
+            <span className="player-name">{black}</span>
+          </div>
+          <button className={`copy-pgn-btn ${copied ? 'copied' : ''}`} onClick={handleCopy} title="Notasyonu kopyala">
+            {copied ? '✓ Kopyalandı' : '📋 Kopyala'}
+          </button>
         </div>
         <div className="game-meta">
           {timeLabel && <span className="time-class-badge">{timeLabel}</span>}
