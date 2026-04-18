@@ -50,9 +50,6 @@ function GameCard({ result }) {
             <span className="vs">vs</span>
             <span className="player-name">{black}</span>
           </div>
-          <button className={`copy-pgn-btn ${copied ? 'copied' : ''}`} onClick={handleCopy} title="Notasyonu kopyala">
-            {copied ? '✓ Kopyalandı' : '📋 Kopyala'}
-          </button>
         </div>
         <div className="game-meta">
           {timeLabel && <span className="time-class-badge">{timeLabel}</span>}
@@ -64,7 +61,12 @@ function GameCard({ result }) {
       </div>
 
       <div className="pgn-section">
-        <div className="section-label">Moves so far</div>
+        <div className="pgn-section-header">
+          <div className="section-label">Moves so far</div>
+          <button className={`copy-pgn-btn ${copied ? 'copied' : ''}`} onClick={handleCopy} title="Copy notation">
+            {copied ? '✓ Copied' : '📋 Copy'}
+          </button>
+        </div>
         <div className="pgn-text pgn-scrollable">{moves || '(game just started)'}</div>
       </div>
 
