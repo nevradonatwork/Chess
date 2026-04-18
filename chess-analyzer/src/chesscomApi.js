@@ -43,6 +43,7 @@ export async function fetchOngoingGames(username) {
     white: toUsername(g.white),
     black: toUsername(g.black),
     time_class: 'daily',
+    turn: turnFromPgn(g.pgn),
   }));
 
   const dailyUrls = new Set(dailyGames.map(g => g.url));
