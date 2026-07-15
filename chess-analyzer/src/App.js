@@ -184,7 +184,10 @@ export default function App() {
       setGameResults(entries);
       runAnalysis(entries, analyze);
     } catch (e) {
-      setFetchError(e.message);
+      const isNetworkError = /load failed|failed to fetch|networkerror/i.test(e.message || '');
+      setFetchError(isNetworkError
+        ? 'Could not reach chess.com – check your internet connection and try again.'
+        : e.message);
     } finally {
       setLoading(false);
     }
