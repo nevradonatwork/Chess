@@ -325,6 +325,16 @@ body {
   font-size: 13px;
 }
 
+.warning-box {
+  background: rgba(251,191,36,0.08);
+  border: 1px solid rgba(251,191,36,0.25);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  color: #fbbf24;
+  font-size: 12px;
+}
+
 /* ── Inline Analysis ──────────────────────────────────── */
 .inline-analyzing {
   display: flex;

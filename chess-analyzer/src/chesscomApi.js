@@ -1,3 +1,5 @@
+import { Chess } from 'chess.js';
+
 const BASE = 'https://api.chess.com/pub/player';
 
 // chess.com's public API doesn't reliably send CORS headers for browser
@@ -17,17 +19,20 @@ function currentYearMonth() {
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-// Derive whose turn it is by counting half-moves in the PGN
+// Derive whose turn it is by loading the PGN into chess.js and reading the
+// resulting turn. This handles "Custom Position" games correctly too: those
+// start from a [FEN] tag (which can have Black to move first) rather than
+// the standard start position, so simply counting half-moves and assuming
+// White moved first (the old approach) gave the wrong answer for them.
 function turnFromPgn(pgn) {
   if (!pgn) return 'white';
-  const moveText = pgn
-    .replace(/\[[^\]]*\]/g, '')
-    .replace(/\{[^}]*\}/g, '')
-    .replace(/\d+\.\.\.\s*/g, '')
-    .replace(/\s*(1-0|0-1|1\/2-1\/2|\*)\s*$/, '')
-    .trim();
-  const halfMoves = moveText.split(/\s+/).filter(t => t && !/^\d+\.+$/.test(t)).length;
-  return halfMoves % 2 === 0 ? 'white' : 'black';
+  try {
+    const chess = new Chess();
+    chess.loadPgn(pgn);
+    return chess.turn() === 'w' ? 'white' : 'black';
+  } catch {
+    return 'white';
+  }
 }
 
 function toUsername(val) {
