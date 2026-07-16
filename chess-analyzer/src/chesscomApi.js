@@ -1,5 +1,17 @@
 const BASE = 'https://api.chess.com/pub/player';
 
+// chess.com's public API doesn't reliably send CORS headers for browser
+// requests, so a direct fetch can fail outright (a network-level "Load
+// failed" / "Failed to fetch", not a normal non-2xx response). Fall back to
+// a CORS proxy when that happens so the app still works from a static page.
+async function fetchWithCorsFallback(url) {
+  try {
+    return await fetch(url);
+  } catch {
+    return fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
+  }
+}
+
 function currentYearMonth() {
   const d = new Date();
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -26,8 +38,8 @@ export async function fetchOngoingGames(username) {
   const clean = username.trim().replace(/^https?:\/\/www\.chess\.com\/member\//i, '').replace(/\/$/, '');
 
   const [dailyRes, archiveRes] = await Promise.all([
-    fetch(`${BASE}/${clean}/games`),
-    fetch(`${BASE}/${clean}/games/${currentYearMonth()}`),
+    fetchWithCorsFallback(`${BASE}/${clean}/games`),
+    fetchWithCorsFallback(`${BASE}/${clean}/games/${currentYearMonth()}`),
   ]);
 
   if (!dailyRes.ok && dailyRes.status !== 404) {
