@@ -111,18 +111,21 @@ export function uciMovesToSan(startFen, uciMoves) {
   }
 }
 
-export function fenFromMoves(moveText) {
-  if (!moveText) return null;
+// Derive the current position straight from the raw PGN via chess.js's own
+// PGN loader, rather than hand-parsing the move text. This matters for
+// chess.com "Custom Position" games: they carry a [FEN]/[SetUp] tag with a
+// non-standard start position (sometimes with Black to move first) and
+// movetext like "1... d5 2. e5", and chess.js's loadPgn already knows how to
+// replay that correctly onto the custom start — a manual regex-based
+// tokenizer kept mis-handling the "N... "/"N. ... " ellipsis markers and,
+// worse, was never even applying the played moves on top of the custom FEN.
+export function fenFromPgn(pgn) {
+  if (!pgn) return { fen: null, complete: true };
   try {
     const chess = new Chess();
-    const clean = moveText.replace(/\d+\.\s*/g, '').trim();
-    const tokens = clean.split(/\s+/).filter(Boolean);
-    for (const token of tokens) {
-      const result = chess.move(token);
-      if (!result) break;
-    }
-    return chess.fen();
+    chess.loadPgn(pgn);
+    return { fen: chess.fen(), complete: true };
   } catch {
-    return null;
+    return { fen: null, complete: false };
   }
 }

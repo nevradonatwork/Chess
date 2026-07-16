@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import './App.css';
 import { fetchOngoingGames, parsePgn } from './chesscomApi';
-import { useStockfish, uciMovesToSan, fenFromMoves } from './useStockfish';
+import { useStockfish, uciMovesToSan, fenFromPgn } from './useStockfish';
 
 const DEFAULT_USERNAME = 'nevradonat';
 
@@ -80,6 +80,10 @@ function GameCard({ result }) {
         <div className="error-box">{analysis.error}</div>
       )}
 
+      {analysis && !analysis.error && analysis.warning && (
+        <div className="warning-box">{analysis.warning}</div>
+      )}
+
       {analysis && !analysis.error && (
         <div className="inline-analysis">
           <div className="best-move-box">
@@ -122,13 +126,20 @@ export default function App() {
   const runAnalysis = useCallback(async (entries, analyze) => {
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
-      const { moves, fen: pgnFen } = parsePgn(entry.game.pgn);
-      let currentFen = pgnFen || fenFromMoves(moves);
+      const { fen: derivedFen, complete } = fenFromPgn(entry.game.pgn);
+      let currentFen = derivedFen;
       if (!currentFen) {
         currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
       }
 
-      let analysis = { bestMove: null, bestMoveSan: null, continuationSan: [], score: null, error: null };
+      let analysis = {
+        bestMove: null,
+        bestMoveSan: null,
+        continuationSan: [],
+        score: null,
+        error: null,
+        warning: complete ? null : 'Could not parse this game\'s move list – analysis may be based on the wrong position.',
+      };
 
       if (!sfReadyRef.current) {
         analysis.error = 'Engine not ready – try refreshing.';
