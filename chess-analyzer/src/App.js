@@ -195,10 +195,14 @@ export default function App() {
       setGameResults(entries);
       runAnalysis(entries, analyze);
     } catch (e) {
-      const isNetworkError = /load failed|failed to fetch|networkerror/i.test(e.message || '');
-      setFetchError(isNetworkError
-        ? 'Could not reach chess.com – check your internet connection and try again.'
-        : e.message);
+      // Only show messages we deliberately raised (chesscomApi.js marks
+      // those with isAppError). Anything else is an unexpected browser or
+      // library error whose raw text isn't useful to a user, so log it for
+      // debugging and show one consistent, actionable message instead.
+      console.error('fetchOngoingGames failed:', e);
+      setFetchError(e.isAppError
+        ? e.message
+        : 'Could not load games from chess.com – check your connection and try again.');
     } finally {
       setLoading(false);
     }
