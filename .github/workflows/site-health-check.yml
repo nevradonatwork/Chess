@@ -1,0 +1,110 @@
+name: Site health check
+
+on:
+  schedule:
+    - cron: '13 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright@1.48.0
+          npx playwright install --with-deps chromium
+
+      - name: Run health check
+        id: healthcheck
+        run: node .github/scripts/check-site-health.js
+        continue-on-error: true
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: health-check-report
+          path: health-check-report.txt
+          retention-days: 14
+
+      - name: Open or update issue on failure
+        if: steps.healthcheck.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('health-check-report.txt', 'utf8');
+            const label = 'site-health';
+
+            const { data: labels } = await github.rest.issues.listLabelsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            if (!labels.some(l => l.name === label)) {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: label,
+                color: 'd73a4a',
+                description: 'Opened automatically by the scheduled site health check',
+              });
+            }
+
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+            });
+
+            if (openIssues.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: openIssues[0].number,
+                body: `Still failing as of ${new Date().toISOString()}:\n\n\`\`\`\n${report}\n\`\`\``,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: 'Automated site health check failed',
+                body: `The scheduled health check for https://nevradonatwork.github.io/Chess/ found a problem:\n\n\`\`\`\n${report}\n\`\`\``,
+                labels: [label],
+              });
+            }
+
+      - name: Close issue on recovery
+        if: steps.healthcheck.outcome == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = 'site-health';
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+            });
+            for (const issue of openIssues) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `Health check passed again as of ${new Date().toISOString()} - closing.`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed',
+              });
+            }
