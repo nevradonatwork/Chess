@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import './App.css';
 import { fetchOngoingGames, parsePgn } from './chesscomApi';
 import { useStockfish, uciMovesToSan, fenFromPgn } from './useStockfish';
+import { logError, getErrorLog, downloadErrorLog } from './errorLog';
 
 const DEFAULT_USERNAME = 'nevradonat';
 
@@ -122,6 +123,17 @@ export default function App() {
   const sfReadyRef = useRef(sfReady);
   sfReadyRef.current = sfReady;
   const autoLoaded = useRef(false);
+  const [logCount, setLogCount] = useState(() => getErrorLog().length);
+  const logAndCount = useCallback((context, error) => {
+    logError(context, error);
+    setLogCount(getErrorLog().length);
+  }, []);
+
+  // useStockfish logs engine errors internally (it has no access to this
+  // component's log-count state); pick those up whenever they change.
+  useEffect(() => {
+    if (sfError) setLogCount(getErrorLog().length);
+  }, [sfError]);
 
   const runAnalysis = useCallback(async (entries, analyze) => {
     for (let i = 0; i < entries.length; i++) {
@@ -162,13 +174,14 @@ export default function App() {
             analysis.continuationSan = uciMovesToSan(currentFen, res.pvMoves);
           }
         } catch (e) {
+          logAndCount(`analyze:${entry.game.url}`, e);
           analysis.error = `Analysis failed: ${e.message}`;
         }
       }
 
       setGameResults(prev => prev.map((r, idx) => idx === i ? { ...r, analysis } : r));
     }
-  }, []);
+  }, [logAndCount]);
 
   const handleFetch = useCallback(async () => {
     const raw = input.trim();
@@ -199,14 +212,14 @@ export default function App() {
       // those with isAppError). Anything else is an unexpected browser or
       // library error whose raw text isn't useful to a user, so log it for
       // debugging and show one consistent, actionable message instead.
-      console.error('fetchOngoingGames failed:', e);
+      logAndCount('fetchOngoingGames', e);
       setFetchError(e.isAppError
         ? e.message
         : 'Could not load games from chess.com – check your connection and try again.');
     } finally {
       setLoading(false);
     }
-  }, [input, analyze, runAnalysis]);
+  }, [input, analyze, runAnalysis, logAndCount]);
 
   useEffect(() => {
     if (sfReady && !autoLoaded.current) {
@@ -249,6 +262,11 @@ export default function App() {
             </button>
           </div>
           {fetchError && <div className="fetch-error">{fetchError}</div>}
+          {logCount > 0 && (
+            <button className="error-log-link" onClick={downloadErrorLog}>
+              🐞 Download error log ({logCount})
+            </button>
+          )}
         </div>
 
         {gameResults.length > 0 && (
