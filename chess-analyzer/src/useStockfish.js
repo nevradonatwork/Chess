@@ -10,48 +10,73 @@ export function useStockfish() {
   useEffect(() => {
     let sf;
     let timeout;
-    try {
-      sf = new Worker(`${process.env.PUBLIC_URL}/stockfish.js`);
+    let cancelled = false;
+    const MAX_ATTEMPTS = 2; // 1 retry after a first transient failure
 
-      let initDone = false;
+    // Worker init failures on mobile browsers (e.g. under memory pressure)
+    // are often transient, so one retry happens silently before giving up
+    // and asking the user to refresh manually.
+    const failOrRetry = (attempt, context, error, failMessage) => {
+      clearTimeout(timeout);
+      if (sf) sf.terminate();
+      if (cancelled) return;
+      logError(attempt < MAX_ATTEMPTS - 1 ? `${context}-retrying` : context, error);
+      if (attempt < MAX_ATTEMPTS - 1) {
+        startEngine(attempt + 1);
+      } else {
+        setError(failMessage);
+      }
+    };
 
-      timeout = setTimeout(() => {
-        if (!initDone) {
-          logError('stockfish-init-timeout', new Error('No readyok within 20s'));
-          setError('Engine timed out – try refreshing or use a desktop browser');
-          if (sf) sf.terminate();
-        }
-      }, 20000);
+    function startEngine(attempt) {
+      try {
+        sf = new Worker(`${process.env.PUBLIC_URL}/stockfish.js`);
 
-      const initHandler = (e) => {
-        const msg = typeof e === 'string' ? e : e.data;
-        if (msg === 'uciok') {
-          sf.postMessage('isready');
-        }
-        if (msg === 'readyok') {
+        let initDone = false;
+
+        timeout = setTimeout(() => {
           if (!initDone) {
+            failOrRetry(attempt, 'stockfish-init-timeout', new Error('No readyok within 20s'),
+              'Engine timed out – try refreshing or use a desktop browser');
+          }
+        }, 20000);
+
+        const initHandler = (e) => {
+          const msg = typeof e === 'string' ? e : e.data;
+          if (msg === 'uciok') {
+            sf.postMessage('isready');
+          }
+          if (msg === 'readyok' && !initDone) {
             initDone = true;
             clearTimeout(timeout);
             sfRef.current = sf;
             setReady(true);
           }
-        }
-      };
+        };
 
-      sf.onmessage = initHandler;
-      sf.onerror = (e) => {
+        sf.onmessage = initHandler;
+        sf.onerror = (e) => {
+          // Worker ErrorEvents often have an empty .message (e.g. for a
+          // script-load failure), which used to log as the useless
+          // "[object Event]" (String(e) on a plain Event). Pull out
+          // whatever detail is actually available instead.
+          const detail = e?.error instanceof Error
+            ? e.error
+            : new Error(e?.message || `Worker error${e?.filename ? ` at ${e.filename}:${e.lineno}:${e.colno}` : ' (no detail available)'}`);
+          failOrRetry(attempt, 'stockfish-worker-error', detail, 'Engine failed to load – try refreshing');
+        };
+        sf.postMessage('uci');
+      } catch (e) {
         clearTimeout(timeout);
-        logError('stockfish-worker-error', e?.message ? e : new Error(String(e)));
-        setError('Engine failed to load – try refreshing');
-      };
-      sf.postMessage('uci');
-    } catch (e) {
-      clearTimeout(timeout);
-      logError('stockfish-init', e);
-      setError('Engine not supported on this browser');
+        logError('stockfish-init', e);
+        setError('Engine not supported on this browser');
+      }
     }
 
+    startEngine(0);
+
     return () => {
+      cancelled = true;
       clearTimeout(timeout);
       if (sf) sf.terminate();
     };
