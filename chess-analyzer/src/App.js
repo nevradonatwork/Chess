@@ -262,11 +262,6 @@ export default function App() {
             </button>
           </div>
           {fetchError && <div className="fetch-error">{fetchError}</div>}
-          {logCount > 0 && (
-            <button className="error-log-link" onClick={downloadErrorLog}>
-              🐞 Download error log ({logCount})
-            </button>
-          )}
         </div>
 
         {gameResults.length > 0 && (
@@ -279,6 +274,10 @@ export default function App() {
             ))}
           </div>
         )}
+
+        <button className="error-log-link" onClick={downloadErrorLog}>
+          🐞 Download error log ({logCount})
+        </button>
       </main>
     </div>
   );
