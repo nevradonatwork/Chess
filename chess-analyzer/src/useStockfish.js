@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Chess } from 'chess.js';
+import { logError } from './errorLog';
 
 export function useStockfish() {
   const sfRef = useRef(null);
@@ -16,6 +17,7 @@ export function useStockfish() {
 
       timeout = setTimeout(() => {
         if (!initDone) {
+          logError('stockfish-init-timeout', new Error('No readyok within 20s'));
           setError('Engine timed out – try refreshing or use a desktop browser');
           if (sf) sf.terminate();
         }
@@ -39,11 +41,13 @@ export function useStockfish() {
       sf.onmessage = initHandler;
       sf.onerror = (e) => {
         clearTimeout(timeout);
+        logError('stockfish-worker-error', e?.message ? e : new Error(String(e)));
         setError('Engine failed to load – try refreshing');
       };
       sf.postMessage('uci');
     } catch (e) {
       clearTimeout(timeout);
+      logError('stockfish-init', e);
       setError('Engine not supported on this browser');
     }
 
