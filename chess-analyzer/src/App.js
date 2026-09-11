@@ -160,10 +160,17 @@ export default function App() {
           const res = await analyze(currentFen);
           if (!res.bestMove) {
             // analyze() resolves with a null bestMove (rather than
-            // rejecting) when the engine crashed or timed out mid-search -
-            // that's not "no good move found", so say so instead of
-            // silently showing a blank "—" eval.
+            // rejecting) when the engine crashed or timed out mid-search
+            // before it ever produced a usable line - that's not "no good
+            // move found", so say so instead of silently showing a blank
+            // "—" eval.
             analysis.error = 'Engine analysis failed (it may have crashed or timed out) – try again.';
+          } else if (res.partial && !analysis.warning) {
+            // The engine crashed/restarted mid-search but had already
+            // reported a line at some depth - a restarted engine can't
+            // resume the exact interrupted search, so this is the deepest
+            // real result available rather than the full requested depth.
+            analysis.warning = `Engine restarted during analysis – showing the best line found at depth ${res.depthReached} instead of the full depth ${res.targetDepth}.`;
           }
           analysis.bestMove = res.bestMove;
           analysis.score = res.score;
