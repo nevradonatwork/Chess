@@ -158,6 +158,13 @@ export default function App() {
       } else {
         try {
           const res = await analyze(currentFen);
+          if (!res.bestMove) {
+            // analyze() resolves with a null bestMove (rather than
+            // rejecting) when the engine crashed or timed out mid-search -
+            // that's not "no good move found", so say so instead of
+            // silently showing a blank "—" eval.
+            analysis.error = 'Engine analysis failed (it may have crashed or timed out) – try again.';
+          }
           analysis.bestMove = res.bestMove;
           analysis.score = res.score;
 

@@ -2,10 +2,22 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Chess } from 'chess.js';
 import { logError } from './errorLog';
 
+const IS_MOBILE = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+// Depth 22 (desktop) / 15 (mobile) ply. A smaller transposition-table Hash
+// and a movetime cap alongside the depth limit both reduce memory/time
+// blowup risk on memory-constrained mobile WASM.
+const DEFAULT_DEPTH = IS_MOBILE ? 15 : 22;
+const HASH_MB = IS_MOBILE ? 8 : 32;
+const MOVETIME_MS = IS_MOBILE ? 15000 : 30000;
+
 export function useStockfish() {
   const sfRef = useRef(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(null);
+  // The in-flight analyze() call's own settle function, if any, so a worker
+  // crash/restart during analysis (not just during init) can unstick it
+  // immediately instead of leaving the UI on "Analyzing…" forever.
+  const pendingAnalysisRef = useRef(null);
 
   useEffect(() => {
     let sf;
@@ -19,11 +31,17 @@ export function useStockfish() {
     const failOrRetry = (attempt, context, error, failMessage) => {
       clearTimeout(timeout);
       if (sf) sf.terminate();
+      sfRef.current = null;
+      if (pendingAnalysisRef.current) {
+        pendingAnalysisRef.current({ bestMove: null, pvMoves: [], score: null });
+        pendingAnalysisRef.current = null;
+      }
       if (cancelled) return;
       logError(attempt < MAX_ATTEMPTS - 1 ? `${context}-retrying` : context, error);
       if (attempt < MAX_ATTEMPTS - 1) {
         startEngine(attempt + 1);
       } else {
+        setReady(false);
         setError(failMessage);
       }
     };
@@ -44,6 +62,7 @@ export function useStockfish() {
         const initHandler = (e) => {
           const msg = typeof e === 'string' ? e : e.data;
           if (msg === 'uciok') {
+            sf.postMessage(`setoption name Hash value ${HASH_MB}`);
             sf.postMessage('isready');
           }
           if (msg === 'readyok' && !initDone) {
@@ -82,13 +101,34 @@ export function useStockfish() {
     };
   }, []);
 
-  const analyze = useCallback((fen, depth = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? 12 : 18) => {
+  const analyze = useCallback((fen, depth = DEFAULT_DEPTH) => {
     return new Promise((resolve) => {
       const sf = sfRef.current;
       if (!sf) { resolve({ bestMove: null, pvMoves: [], score: null }); return; }
 
       let pvMoves = [];
       let score = null;
+      let settled = false;
+
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(safetyTimeout);
+        if (pendingAnalysisRef.current === finish) pendingAnalysisRef.current = null;
+        resolve(result);
+      };
+
+      // The engine is given a movetime cap alongside the depth limit (see
+      // the "go" command below) as its own safety net, but if the worker
+      // hangs or dies without ever emitting an error event, this backstop
+      // still resolves the promise instead of leaving the UI stuck on
+      // "Analyzing…" forever.
+      const safetyTimeout = setTimeout(() => {
+        logError('stockfish-analysis-timeout', new Error(`No bestmove within ${MOVETIME_MS + 5000}ms (depth ${depth})`));
+        finish({ bestMove: null, pvMoves: [], score: null });
+      }, MOVETIME_MS + 5000);
+
+      pendingAnalysisRef.current = finish;
 
       const handler = (e) => {
         const msg = typeof e === 'string' ? e : e.data;
@@ -108,14 +148,14 @@ export function useStockfish() {
         if (msg.startsWith('bestmove')) {
           const bestMove = msg.split(' ')[1];
           sf.onmessage = null;
-          resolve({ bestMove, pvMoves, score });
+          finish({ bestMove, pvMoves, score });
         }
       };
 
       sf.onmessage = handler;
       sf.postMessage('ucinewgame');
       sf.postMessage(`position fen ${fen}`);
-      sf.postMessage(`go depth ${depth}`);
+      sf.postMessage(`go depth ${depth} movetime ${MOVETIME_MS}`);
     });
   }, []);
 
