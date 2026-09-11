@@ -33,8 +33,9 @@ export function useStockfish() {
       if (sf) sf.terminate();
       sfRef.current = null;
       if (pendingAnalysisRef.current) {
-        pendingAnalysisRef.current({ bestMove: null, pvMoves: [], score: null });
+        const notifyCrash = pendingAnalysisRef.current;
         pendingAnalysisRef.current = null;
+        notifyCrash();
       }
       if (cancelled) return;
       logError(attempt < MAX_ATTEMPTS - 1 ? `${context}-retrying` : context, error);
@@ -104,18 +105,47 @@ export function useStockfish() {
   const analyze = useCallback((fen, depth = DEFAULT_DEPTH) => {
     return new Promise((resolve) => {
       const sf = sfRef.current;
-      if (!sf) { resolve({ bestMove: null, pvMoves: [], score: null }); return; }
+      if (!sf) { resolve({ bestMove: null, pvMoves: [], score: null, depthReached: 0, targetDepth: depth }); return; }
 
       let pvMoves = [];
       let score = null;
+      let depthReached = 0;
       let settled = false;
 
       const finish = (result) => {
         if (settled) return;
         settled = true;
         clearTimeout(safetyTimeout);
-        if (pendingAnalysisRef.current === finish) pendingAnalysisRef.current = null;
+        if (pendingAnalysisRef.current === notifyCrash) pendingAnalysisRef.current = null;
         resolve(result);
+      };
+
+      // Stockfish reports progress via "info depth N ... pv ..." lines as it
+      // iteratively deepens, so the best line found at the deepest depth
+      // reached so far is always sitting in pvMoves/score/depthReached. If
+      // the search gets interrupted (worker crash/restart, or the safety
+      // timeout below) before a "bestmove" ever arrives, that's still a
+      // real - if shallower than requested - analysis, so it's used instead
+      // of failing outright. A restarted engine has no UCI-level way to
+      // resume the exact interrupted search (its transposition table and
+      // search tree are gone), so this "best result so far" is the
+      // practical equivalent rather than true resumption.
+      const partialResult = () => ({
+        bestMove: pvMoves[0] || null,
+        pvMoves,
+        score,
+        partial: pvMoves.length > 0,
+        depthReached,
+        targetDepth: depth,
+      });
+
+      const notifyCrash = () => {
+        const result = partialResult();
+        if (result.partial) {
+          logError('stockfish-partial-result-used',
+            new Error(`Engine restarted mid-search at depth ${depthReached}/${depth}; using that partial result`));
+        }
+        finish(result);
       };
 
       // The engine is given a movetime cap alongside the depth limit (see
@@ -124,16 +154,19 @@ export function useStockfish() {
       // still resolves the promise instead of leaving the UI stuck on
       // "Analyzing…" forever.
       const safetyTimeout = setTimeout(() => {
-        logError('stockfish-analysis-timeout', new Error(`No bestmove within ${MOVETIME_MS + 5000}ms (depth ${depth})`));
-        finish({ bestMove: null, pvMoves: [], score: null });
+        logError('stockfish-analysis-timeout', new Error(`No bestmove within ${MOVETIME_MS + 5000}ms (depth ${depth}, reached ${depthReached})`));
+        finish(partialResult());
       }, MOVETIME_MS + 5000);
 
-      pendingAnalysisRef.current = finish;
+      pendingAnalysisRef.current = notifyCrash;
 
       const handler = (e) => {
         const msg = typeof e === 'string' ? e : e.data;
 
         if (msg.startsWith('info') && msg.includes(' pv ')) {
+          const depthMatch = msg.match(/(?:^|\s)depth (\d+)/);
+          if (depthMatch) depthReached = parseInt(depthMatch[1], 10);
+
           const cpMatch = msg.match(/score cp (-?\d+)/);
           const mateMatch = msg.match(/score mate (-?\d+)/);
           if (cpMatch) score = parseInt(cpMatch[1], 10);
@@ -148,7 +181,7 @@ export function useStockfish() {
         if (msg.startsWith('bestmove')) {
           const bestMove = msg.split(' ')[1];
           sf.onmessage = null;
-          finish({ bestMove, pvMoves, score });
+          finish({ bestMove, pvMoves, score, partial: false, depthReached, targetDepth: depth });
         }
       };
 
